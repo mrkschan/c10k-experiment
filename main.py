@@ -18,7 +18,7 @@ def main():
             break
 
         conn.sendall(data)
-        conn.close()
+    conn.close()
 
 
 if __name__ == '__main__':
