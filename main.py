@@ -57,6 +57,7 @@ def main():
     HOST, PORT = '127.0.0.1', 8000
 
     socket_ = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    socket_.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     socket_.bind((HOST, PORT))
 
     try:
