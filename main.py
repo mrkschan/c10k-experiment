@@ -1,5 +1,6 @@
 import multiprocessing
 import os
+import select
 import socket
 
 
@@ -13,6 +14,26 @@ def handle_conn(conn, addr):
     data = conn.recv(32)
     conn.sendall(data)
     conn.close()
+
+
+def select_server(socket_):
+    child = []
+    try:
+        while True:
+            print 'Waiting for peer'
+            readable, w, e = select.select([socket_], [], [], 1)
+
+            if socket_ not in readable:
+                continue
+
+            conn, addr = socket_.accept()
+            print 'Peer connected:', addr
+
+            p = multiprocessing.Process(target=handle_conn, args=(conn, addr))
+            p.start()
+            child.append(p)
+    finally:
+        [p.terminate() for p in child if p.is_alive()]
 
 
 def basic_server(socket_):
@@ -37,8 +58,12 @@ def main():
     socket_.bind((HOST, PORT))
 
     try:
+        #socket_.listen(0)
+        #basic_server(socket_)
+
+        socket_.setblocking(0)
         socket_.listen(0)
-        basic_server(socket_)
+        select_server(socket_)
     finally:
         socket_.close()
 
