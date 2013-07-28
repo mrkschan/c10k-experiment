@@ -5,7 +5,7 @@ import socket
 
 
 def handle_conn(conn, addr):
-    msg = 'Process: %(pid)s; Client: %(addr)s' % {
+    msg = 'Process: %(pid)s; Peer: %(addr)s' % {
         'pid': os.getpid(),
         'addr': addr,
     }
@@ -40,12 +40,14 @@ def basic_server(socket_):
     child = []
     try:
         while True:
+            print 'Waiting for peer'
+
             conn, addr = socket_.accept()
+            print 'Peer connected:', addr
+
             p = multiprocessing.Process(target=handle_conn, args=(conn, addr))
             p.start()
             child.append(p)
-    except:
-        pass
     finally:
         [p.terminate() for p in child if p.is_alive()]
 
