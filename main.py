@@ -82,6 +82,34 @@ def select_server_v1(socket_):
         [p.terminate() for p in child if p.is_alive()]
 
 
+def select_server_v2(socket_):
+    '''Single process select() with non-blocking accept() and recv().
+
+    When peer is accepted, use select() to see if we can recv() data from her.
+    Peer is only served when she has provided data. A slow peer cannot block a
+    fast peer and thus concurrency can be achieved (even though peers are
+    handled one by one where sub-process can address that).
+    '''
+    socks = [socket_]
+    while True:
+        print 'Waiting for peer'
+        readable, w, e = select.select(socks, [], [], 1)
+
+        for s in readable:
+            if s is socket_:
+                conn, addr = socket_.accept()
+                conn.setblocking(0)
+
+                print 'Peer connected:', addr
+                socks.append(conn)
+            else:
+                socks.remove(s)
+                conn, addr = s, s.getpeername()
+
+                print 'Peer ready:', addr
+                handle_conn(conn, addr)
+
+
 def main():
     # Ref: http://is.gd/S1dtCH
     HOST, PORT = '127.0.0.1', 8000
@@ -98,9 +126,13 @@ def main():
         #socket_.listen(0)
         #select_server_v0(socket_)
 
+        #socket_.setblocking(0)
+        #socket_.listen(0)
+        #select_server_v1(socket_)
+
         socket_.setblocking(0)
         socket_.listen(0)
-        select_server_v1(socket_)
+        select_server_v2(socket_)
     finally:
         socket_.close()
 
