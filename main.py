@@ -15,18 +15,11 @@ def handle_conn(conn, addr):
     conn.close()
 
 
-def main():
-    # Ref: http://is.gd/S1dtCH
-    HOST, PORT = '127.0.0.1', 8000
-
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.bind((HOST, PORT))
-
+def basic_server(socket_):
     child = []
     try:
-        s.listen(0)
         while True:
-            conn, addr = s.accept()
+            conn, addr = socket_.accept()
             p = multiprocessing.Process(target=handle_conn, args=(conn, addr))
             p.start()
             child.append(p)
@@ -34,7 +27,20 @@ def main():
         pass
     finally:
         [p.terminate() for p in child if p.is_alive()]
-        s.close()
+
+
+def main():
+    # Ref: http://is.gd/S1dtCH
+    HOST, PORT = '127.0.0.1', 8000
+
+    socket_ = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    socket_.bind((HOST, PORT))
+
+    try:
+        socket_.listen(0)
+        basic_server(socket_)
+    finally:
+        socket_.close()
 
 
 if __name__ == '__main__':
