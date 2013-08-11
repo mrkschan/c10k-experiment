@@ -110,6 +110,26 @@ def select_server_v2(socket_):
                 handle_conn(conn, addr)
 
 
+def epoll_server_v0(socket_):
+    '''Single process epoll(). Use non-blocking accept() but blocking recv().
+
+    Since this is using single process and recv() blocks the next accept(),
+    concurrency is not achieved.
+    '''
+    epoll = select.epoll()
+    epoll.register(socket_, select.EPOLLIN | select.EPOLLET)
+    while True:
+        print 'Waiting for peer'
+        for fd, event in epoll.poll(timeout=1):
+            if fd != socket_.fileno():
+                continue
+
+            conn, addr = socket_.accept()
+            print 'Peer connected:', addr
+
+            handle_conn(conn, addr)
+
+
 def main():
     # Ref: http://is.gd/S1dtCH
     HOST, PORT = '127.0.0.1', 8000
@@ -130,9 +150,13 @@ def main():
         #socket_.listen(0)
         #select_server_v1(socket_)
 
+        #socket_.setblocking(0)
+        #socket_.listen(0)
+        #select_server_v2(socket_)
+
         socket_.setblocking(0)
         socket_.listen(0)
-        select_server_v2(socket_)
+        epoll_server_v0(socket_)
     finally:
         socket_.close()
 
