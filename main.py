@@ -130,6 +130,31 @@ def epoll_server_v0(socket_):
             handle_conn(conn, addr)
 
 
+def epoll_server_v1(socket_):
+    '''Single process epoll() with sub-processes to recv(). Use non-blocking
+       accept() but blocking recv().
+    '''
+    child = []
+    epoll = select.epoll()
+    epoll.register(socket_, select.EPOLLIN | select.EPOLLET)
+    try:
+        while True:
+            print 'Waiting for peer'
+            for fd, event in epoll.poll(timeout=1):
+                if fd != socket_.fileno():
+                    continue
+
+                conn, addr = socket_.accept()
+                print 'Peer connected:', addr
+
+                p = multiprocessing.Process(target=handle_conn,
+                                            args=(conn, addr))
+                p.start()
+                child.append(p)
+    finally:
+        [p.terminate() for p in child if p.is_alive()]
+
+
 def main():
     # Ref: http://is.gd/S1dtCH
     HOST, PORT = '127.0.0.1', 8000
@@ -154,9 +179,13 @@ def main():
         #socket_.listen(0)
         #select_server_v2(socket_)
 
+        #socket_.setblocking(0)
+        #socket_.listen(0)
+        #epoll_server_v0(socket_)
+
         socket_.setblocking(0)
         socket_.listen(0)
-        epoll_server_v0(socket_)
+        epoll_server_v1(socket_)
     finally:
         socket_.close()
 
