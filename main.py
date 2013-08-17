@@ -155,6 +155,33 @@ def epoll_server_v1(socket_):
         [p.terminate() for p in child if p.is_alive()]
 
 
+def epoll_server_v2(socket_):
+    '''Single process select() with non-blocking accept() and recv(). '''
+    epoll = select.epoll()
+    epoll.register(socket_, select.EPOLLIN | select.EPOLLET)
+
+    peers = {}  # fd => socket
+    while True:
+        print 'Waiting for peer'
+        for fd, event in epoll.poll(timeout=1):
+            if fd == socket_.fileno():
+                conn, addr = socket_.accept()
+                conn.setblocking(0)
+
+                print 'Peer connected:', addr
+
+                peers[conn.fileno()] = conn
+                epoll.register(conn, select.EPOLLIN | select.EPOLLET)
+
+            elif event & select.EPOLLIN:
+                epoll.unregister(fd)
+
+                conn, addr = peers[fd], peers[fd].getpeername()
+
+                print 'Peer ready:', addr
+                handle_conn(conn, addr)
+
+
 def main():
     # Ref: http://is.gd/S1dtCH
     HOST, PORT = '127.0.0.1', 8000
@@ -183,9 +210,13 @@ def main():
         #socket_.listen(0)
         #epoll_server_v0(socket_)
 
+        #socket_.setblocking(0)
+        #socket_.listen(0)
+        #epoll_server_v1(socket_)
+
         socket_.setblocking(0)
         socket_.listen(0)
-        epoll_server_v1(socket_)
+        epoll_server_v2(socket_)
     finally:
         socket_.close()
 
