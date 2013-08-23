@@ -116,18 +116,21 @@ def epoll_server_v0(socket_):
     Since this is using single process and recv() blocks the next accept(),
     concurrency is not achieved.
     '''
-    epoll = select.epoll()
-    epoll.register(socket_, select.EPOLLIN | select.EPOLLET)
-    while True:
-        print 'Waiting for peer'
-        for fd, event in epoll.poll(timeout=1):
-            if fd != socket_.fileno():
-                continue
+    try:
+        epoll = select.epoll()
+        epoll.register(socket_, select.EPOLLIN | select.EPOLLET)
+        while True:
+            print 'Waiting for peer'
+            for fd, event in epoll.poll(timeout=1):
+                if fd != socket_.fileno():
+                    continue
 
-            conn, addr = socket_.accept()
-            print 'Peer connected:', addr
+                conn, addr = socket_.accept()
+                print 'Peer connected:', addr
 
-            handle_conn(conn, addr)
+                handle_conn(conn, addr)
+    finally:
+        epoll.close()
 
 
 def epoll_server_v1(socket_):
@@ -135,9 +138,10 @@ def epoll_server_v1(socket_):
        accept() but blocking recv().
     '''
     child = []
-    epoll = select.epoll()
-    epoll.register(socket_, select.EPOLLIN | select.EPOLLET)
+
     try:
+        epoll = select.epoll()
+        epoll.register(socket_, select.EPOLLIN | select.EPOLLET)
         while True:
             print 'Waiting for peer'
             for fd, event in epoll.poll(timeout=1):
@@ -152,34 +156,38 @@ def epoll_server_v1(socket_):
                 p.start()
                 child.append(p)
     finally:
+        epoll.close()
         [p.terminate() for p in child if p.is_alive()]
 
 
 def epoll_server_v2(socket_):
     '''Single process select() with non-blocking accept() and recv(). '''
-    epoll = select.epoll()
-    epoll.register(socket_, select.EPOLLIN | select.EPOLLET)
-
     peers = {}  # fd => socket
-    while True:
-        print 'Waiting for peer'
-        for fd, event in epoll.poll(timeout=1):
-            if fd == socket_.fileno():
-                conn, addr = socket_.accept()
-                conn.setblocking(0)
 
-                print 'Peer connected:', addr
+    try:
+        epoll = select.epoll()
+        epoll.register(socket_, select.EPOLLIN | select.EPOLLET)
+        while True:
+            print 'Waiting for peer'
+            for fd, event in epoll.poll(timeout=1):
+                if fd == socket_.fileno():
+                    conn, addr = socket_.accept()
+                    conn.setblocking(0)
 
-                peers[conn.fileno()] = conn
-                epoll.register(conn, select.EPOLLIN | select.EPOLLET)
+                    print 'Peer connected:', addr
 
-            elif event & select.EPOLLIN:
-                epoll.unregister(fd)
+                    peers[conn.fileno()] = conn
+                    epoll.register(conn, select.EPOLLIN | select.EPOLLET)
 
-                conn, addr = peers[fd], peers[fd].getpeername()
+                elif event & select.EPOLLIN:
+                    epoll.unregister(fd)
 
-                print 'Peer ready:', addr
-                handle_conn(conn, addr)
+                    conn, addr = peers[fd], peers[fd].getpeername()
+
+                    print 'Peer ready:', addr
+                    handle_conn(conn, addr)
+    finally:
+        epoll.close()
 
 
 def main():
