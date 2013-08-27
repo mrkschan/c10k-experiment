@@ -1,7 +1,9 @@
+import argparse
 import multiprocessing
 import os
 import select
 import socket
+import sys
 
 
 def handle_conn(conn, addr):
@@ -191,40 +193,35 @@ def epoll_server_v2(socket_):
 
 
 def main():
-    # Ref: http://is.gd/S1dtCH
     HOST, PORT = '127.0.0.1', 8000
+
+    argparser = argparse.ArgumentParser()
+    argparser.add_argument('mode', help=('Operating mode of the server, '
+                                         'e.g. basic, select, epoll'))
+    args = argparser.parse_args()
+
+    MODES = ('basic', 'select', 'epoll')
+    if args.mode not in MODES:
+        msg = 'Availble operating modes: %s' % ', '.join(MODES)
+        print >> sys.stderr, msg
+        sys.exit(1)
 
     socket_ = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     socket_.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     socket_.bind((HOST, PORT))
 
     try:
-        #socket_.listen(0)
-        #basic_server(socket_)
-
-        #socket_.setblocking(0)
-        #socket_.listen(0)
-        #select_server_v0(socket_)
-
-        #socket_.setblocking(0)
-        #socket_.listen(0)
-        #select_server_v1(socket_)
-
-        #socket_.setblocking(0)
-        #socket_.listen(0)
-        #select_server_v2(socket_)
-
-        #socket_.setblocking(0)
-        #socket_.listen(0)
-        #epoll_server_v0(socket_)
-
-        #socket_.setblocking(0)
-        #socket_.listen(0)
-        #epoll_server_v1(socket_)
-
-        socket_.setblocking(0)
-        socket_.listen(0)
-        epoll_server_v2(socket_)
+        if args.mode == 'basic':
+            socket_.listen(0)
+            basic_server(socket_)
+        elif args.mode == 'select':
+            socket_.setblocking(0)
+            socket_.listen(0)
+            select_server_v2(socket_)
+        elif args.mode == 'epoll':
+            socket_.setblocking(0)
+            socket_.listen(0)
+            epoll_server_v2(socket_)
     finally:
         socket_.close()
 
