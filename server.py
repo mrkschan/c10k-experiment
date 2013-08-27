@@ -1,9 +1,15 @@
-import argparse
 import multiprocessing
 import os
 import select
 import socket
 import sys
+
+try:
+    import argparse
+except:
+    # argparse is only available in Python 2.7+
+    print >> sys.stderr, 'pip install -U argparse'
+    sys.exit(1)
 
 
 def handle_conn(conn, addr):
@@ -194,34 +200,37 @@ def epoll_server_v2(socket_):
 
 def main():
     HOST, PORT = '127.0.0.1', 8000
+    MODES = ('basic', 'select', 'epoll')
 
     argparser = argparse.ArgumentParser()
-    argparser.add_argument('mode', help=('Operating mode of the server, '
-                                         'e.g. basic, select, epoll'))
+    argparser.add_argument('mode', help=('Operating mode of the server: %s'
+                                         % ', '.join(MODES)))
+    argparser.add_argument('--backlog', type=int, default=0,
+                           help='socket.listen() backlog')
     args = argparser.parse_args()
 
-    MODES = ('basic', 'select', 'epoll')
     if args.mode not in MODES:
         msg = 'Availble operating modes: %s' % ', '.join(MODES)
         print >> sys.stderr, msg
         sys.exit(1)
 
     socket_ = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    socket_.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    socket_.bind((HOST, PORT))
-
     try:
+        socket_.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        socket_.bind((HOST, PORT))
+
+        if args.mode in ('select', 'epoll'):
+            socket_.setblocking(0)
+
+        socket_.listen(args.backlog)
         if args.mode == 'basic':
-            socket_.listen(0)
             basic_server(socket_)
         elif args.mode == 'select':
-            socket_.setblocking(0)
-            socket_.listen(0)
             select_server_v2(socket_)
         elif args.mode == 'epoll':
-            socket_.setblocking(0)
-            socket_.listen(0)
             epoll_server_v2(socket_)
+    except KeyboardInterrupt:
+        pass
     finally:
         socket_.close()
 
