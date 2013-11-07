@@ -45,9 +45,6 @@ def basic_server(socket_):
 
 def select_server_v0(socket_):
     '''Single process select(). Use non-blocking accept() but blocking recv().
-
-    Since this is using single process and recv() blocks the next accept(),
-    concurrency is not achieved.
     '''
     while True:
         print 'Waiting for peer'
@@ -65,11 +62,6 @@ def select_server_v0(socket_):
 def select_server_v1(socket_):
     '''Single process select() with sub-processes to recv(). Use non-blocking
        accept() but blocking recv().
-
-    Non-blocking accept() is not affected by the blocking recv() since the
-    blocks happens in the sub-processes. Concurrency is achieved but it's only
-    a slight improvement from *basic_server* because CPU time is still consumed
-    for context-switching when waiting for the blocking recv().
     '''
     child = []
     try:
@@ -91,13 +83,7 @@ def select_server_v1(socket_):
 
 
 def select_server_v2(socket_):
-    '''Single process select() with non-blocking accept() and recv().
-
-    When peer is accepted, use select() to see if we can recv() data from her.
-    Peer is only served when she has provided data. A slow peer cannot block a
-    fast peer and thus concurrency can be achieved (even though peers are
-    handled one by one where sub-process can address that).
-    '''
+    '''Single process select() with non-blocking accept() and recv().'''
     socks = [socket_]
     while True:
         print 'Waiting for peer'
@@ -120,9 +106,6 @@ def select_server_v2(socket_):
 
 def epoll_server_v0(socket_):
     '''Single process epoll(). Use non-blocking accept() but blocking recv().
-
-    Since this is using single process and recv() blocks the next accept(),
-    concurrency is not achieved.
     '''
     try:
         epoll = select.epoll()
@@ -169,7 +152,7 @@ def epoll_server_v1(socket_):
 
 
 def epoll_server_v2(socket_):
-    '''Single process select() with non-blocking accept() and recv(). '''
+    '''Single process select() with non-blocking accept() and recv().'''
     peers = {}  # fd => socket
 
     try:
