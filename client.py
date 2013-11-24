@@ -35,10 +35,13 @@ def send_request(request_id):
         response_time = finish - start
 
         return response_time
-    except Exception as e:
+    except Exception:
         return FAILED
     finally:
         socket_.close()
+
+
+succeeds, total = 0, 0
 
 
 def main():
@@ -51,32 +54,24 @@ def main():
     args = argparser.parse_args()
     workers = multiprocessing.Pool(args.workers)
 
+    def stats(response_time):
+        global succeeds, total
+        succeeds += 1
+        total += response_time
+
     start = time.time()
-    async_results = [workers.apply_async(send_request, args=(i,))
-                     for i in xrange(args.requests)]
+    for i in xrange(args.requests):
+        workers.apply_async(send_request, args=(i,), callback=stats)
     workers.close()
-
-    errors, succeeds, total = 0, 0, 0
-    for async_result in async_results:
-        try:
-            response_time = async_result.get(timeout=TIMEOUT)
-        except Exception as e:
-            response_time = -1
-
-        if response_time == -1:
-            errors += 1
-        else:
-            succeeds += 1
-            total += response_time
-
     workers.join()
     finish = time.time()
 
     if succeeds:
-        avg = total / succeeds * 1000
+        avg = total / succeeds * 1000  # in ms.
     else:
         avg = 0
     rps = args.requests / (finish - start)
+    errors = args.requests - succeeds
 
     msg = ('Errors: %s, Succeeds: %s\n'
            'Response time (avg.): %s ms\n'
