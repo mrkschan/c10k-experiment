@@ -49,8 +49,9 @@ def main():
                            help=('Number of workers to generate requests in '
                                  'parallel'))
     args = argparser.parse_args()
-
     workers = multiprocessing.Pool(args.workers)
+
+    start = time.time()
     async_results = [workers.apply_async(send_request, args=(i,))
                      for i in xrange(args.requests)]
     workers.close()
@@ -69,13 +70,18 @@ def main():
             total += response_time
 
     workers.join()
+    finish = time.time()
+
     if succeeds:
         avg = total / succeeds * 1000
     else:
         avg = 0
+    rps = args.requests / (finish - start)
 
-    msg = 'Errors: %s, Succeeds: %s, Avg. Response Time: %s ms'
-    msg = msg % (errors, succeeds, avg)
+    msg = ('Errors: %s, Succeeds: %s\n'
+           'Response time (avg.): %s ms\n'
+           'Requests per second (avg.): %s req/s')
+    msg = msg % (errors, succeeds, avg, rps)
     print msg
 
 
