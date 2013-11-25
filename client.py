@@ -12,11 +12,11 @@ except:
 
 
 TIMEOUT = 30  # 30 seconds operation timeout
+FAILED = -1
 
 
 def send_request(request_id):
     HOST, PORT = '127.0.0.1', 8000
-    FAILED = -1
 
     start = time.time()
     socket_ = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -59,21 +59,21 @@ def main():
     workers.join()
     finish = time.time()
 
-    total = sum(results)
-    succeeds = len(results)
-    errors = args.requests - succeeds
+    succeeds = [i for i in results if i >= 0]
+    errors = [i for i in results if i < 0]
+    overall = sum(succeeds)
     if succeeds:
-        avg = total / succeeds * 1000  # in ms.
+        avg = overall / len(succeeds) * 1000  # in ms.
     else:
         avg = 0
-    spent = finish - start
-    rps = args.requests / spent
+    time_spent = finish - start
+    rps = args.requests / time_spent
 
     msg = ('Errors: %s, Succeeds: %s\n'
            'Response time (avg.): %s ms\n'
            'Requests per second (avg.): %s req/s\n'
            'Time spent: %s s')
-    msg = msg % (errors, succeeds, avg, rps, spent)
+    msg = msg % (len(errors), len(succeeds), avg, rps, time_spent)
     print msg
 
 
