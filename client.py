@@ -66,12 +66,14 @@ def main():
         avg = total / succeeds * 1000  # in ms.
     else:
         avg = 0
-    rps = args.requests / (finish - start)
+    spent = finish - start
+    rps = args.requests / spent
 
     msg = ('Errors: %s, Succeeds: %s\n'
            'Response time (avg.): %s ms\n'
-           'Requests per second (avg.): %s req/s')
-    msg = msg % (errors, succeeds, avg, rps)
+           'Requests per second (avg.): %s req/s\n'
+           'Time spent: %s s')
+    msg = msg % (errors, succeeds, avg, rps, spent)
     print msg
 
 
