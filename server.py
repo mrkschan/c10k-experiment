@@ -1,5 +1,4 @@
 import multiprocessing
-import os
 import select
 import socket
 import sys
@@ -13,16 +12,7 @@ except:
 
 
 def handle_conn(conn, addr):
-    msg = 'Process: %(pid)s; Peer: %(addr)s' % {
-        'pid': os.getpid(),
-        'addr': addr,
-    }
-    print msg
-
-    print 'Wait for data from peer'
     data = conn.recv(32)
-
-    print 'Data received from peer'
     conn.sendall(data)
     conn.close()
 
@@ -31,10 +21,7 @@ def basic_server(socket_):
     child = []
     try:
         while True:
-            print 'Waiting for peer'
-
             conn, addr = socket_.accept()
-            print 'Peer connected:', addr
 
             p = multiprocessing.Process(target=handle_conn, args=(conn, addr))
             p.start()
@@ -47,7 +34,6 @@ def select_server(socket_):
     '''Single process select() with non-blocking accept() and recv().'''
     socks = [socket_]
     while True:
-        print 'Waiting for peer'
         readable, w, e = select.select(socks, [], [], 1)
 
         for s in readable:
@@ -55,13 +41,11 @@ def select_server(socket_):
                 conn, addr = socket_.accept()
                 conn.setblocking(0)
 
-                print 'Peer connected:', addr
                 socks.append(conn)
             else:
                 socks.remove(s)
                 conn, addr = s, s.getpeername()
 
-                print 'Peer ready:', addr
                 handle_conn(conn, addr)
 
 
@@ -73,13 +57,10 @@ def epoll_server(socket_):
         epoll = select.epoll()
         epoll.register(socket_, select.EPOLLIN | select.EPOLLET)
         while True:
-            print 'Waiting for peer'
             for fd, event in epoll.poll(timeout=1):
                 if fd == socket_.fileno():
                     conn, addr = socket_.accept()
                     conn.setblocking(0)
-
-                    print 'Peer connected:', addr
 
                     peers[conn.fileno()] = conn
                     epoll.register(conn, select.EPOLLIN | select.EPOLLET)
@@ -88,8 +69,6 @@ def epoll_server(socket_):
                     epoll.unregister(fd)
 
                     conn, addr = peers[fd], peers[fd].getpeername()
-
-                    print 'Peer ready:', addr
                     handle_conn(conn, addr)
     finally:
         epoll.close()
