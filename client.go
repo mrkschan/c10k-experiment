@@ -2,11 +2,30 @@ package main
 
 import (
 	"encoding/binary"
+	"flag"
 	"fmt"
 	"net"
 	"os"
+	"strconv"
 	"time"
 )
+
+func usage() {
+	fmt.Println("Usage: %s [--workers=WORKERS] REQUESTS", os.Args[0])
+	os.Exit(0)
+}
+func argparse() (int, int) {
+	var workers int
+	flag.IntVar(&workers, "workers", 1,
+		"Number of workers to generate requests in parallel")
+	flag.Parse()
+	requests, err := strconv.Atoi(flag.Arg(0))
+	if err != nil {
+		usage()
+	}
+
+	return workers, requests
+}
 
 func send_request() {
 	addr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:8000")
@@ -40,21 +59,23 @@ func send_request() {
 	fmt.Println(reply)
 }
 
-
 func main() {
-	var worker = 1024
-	semaphore := make(chan int, worker)
+	workers, requests := argparse()
 
-	// Launch
-	for i := 0; i < worker; i++ {
+	semaphore := make(chan int, requests)
+	for i := 0; i < workers; i++ {
 		go func() {
-			send_request()
-			semaphore <- 1;
+			for j := 0; j < requests/workers; j++ {
+				send_request()
+				semaphore <- 1
+			}
 		}()
 	}
 
 	// Wait for goroutines to complete
-	for i := 0; i < worker; i++ { <- semaphore }
+	for i := 0; i < requests; i++ {
+		<-semaphore
+	}
 
 	os.Exit(0)
 }
