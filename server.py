@@ -43,46 +43,7 @@ def basic_server(socket_):
         [p.terminate() for p in child if p.is_alive()]
 
 
-def select_server_v0(socket_):
-    '''Single process select(). Use non-blocking accept() but blocking recv().
-    '''
-    while True:
-        print 'Waiting for peer'
-        readable, w, e = select.select([socket_], [], [], 1)
-
-        if socket_ not in readable:
-            continue
-
-        conn, addr = socket_.accept()
-        print 'Peer connected:', addr
-
-        handle_conn(conn, addr)
-
-
-def select_server_v1(socket_):
-    '''Single process select() with sub-processes to recv(). Use non-blocking
-       accept() but blocking recv().
-    '''
-    child = []
-    try:
-        while True:
-            print 'Waiting for peer'
-            readable, w, e = select.select([socket_], [], [], 1)
-
-            if socket_ not in readable:
-                continue
-
-            conn, addr = socket_.accept()
-            print 'Peer connected:', addr
-
-            p = multiprocessing.Process(target=handle_conn, args=(conn, addr))
-            p.start()
-            child.append(p)
-    finally:
-        [p.terminate() for p in child if p.is_alive()]
-
-
-def select_server_v2(socket_):
+def select_server(socket_):
     '''Single process select() with non-blocking accept() and recv().'''
     socks = [socket_]
     while True:
@@ -104,54 +65,7 @@ def select_server_v2(socket_):
                 handle_conn(conn, addr)
 
 
-def epoll_server_v0(socket_):
-    '''Single process epoll(). Use non-blocking accept() but blocking recv().
-    '''
-    try:
-        epoll = select.epoll()
-        epoll.register(socket_, select.EPOLLIN | select.EPOLLET)
-        while True:
-            print 'Waiting for peer'
-            for fd, event in epoll.poll(timeout=1):
-                if fd != socket_.fileno():
-                    continue
-
-                conn, addr = socket_.accept()
-                print 'Peer connected:', addr
-
-                handle_conn(conn, addr)
-    finally:
-        epoll.close()
-
-
-def epoll_server_v1(socket_):
-    '''Single process epoll() with sub-processes to recv(). Use non-blocking
-       accept() but blocking recv().
-    '''
-    child = []
-
-    try:
-        epoll = select.epoll()
-        epoll.register(socket_, select.EPOLLIN | select.EPOLLET)
-        while True:
-            print 'Waiting for peer'
-            for fd, event in epoll.poll(timeout=1):
-                if fd != socket_.fileno():
-                    continue
-
-                conn, addr = socket_.accept()
-                print 'Peer connected:', addr
-
-                p = multiprocessing.Process(target=handle_conn,
-                                            args=(conn, addr))
-                p.start()
-                child.append(p)
-    finally:
-        epoll.close()
-        [p.terminate() for p in child if p.is_alive()]
-
-
-def epoll_server_v2(socket_):
+def epoll_server(socket_):
     '''Single process select() with non-blocking accept() and recv().'''
     peers = {}  # fd => socket
 
@@ -209,9 +123,9 @@ def main():
         if args.mode == 'basic':
             basic_server(socket_)
         elif args.mode == 'select':
-            select_server_v2(socket_)
+            select_server(socket_)
         elif args.mode == 'epoll':
-            epoll_server_v2(socket_)
+            epoll_server(socket_)
     except KeyboardInterrupt:
         pass
     finally:
