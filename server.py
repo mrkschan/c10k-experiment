@@ -32,32 +32,44 @@ def basic_server(socket_):
 
 def select_server(socket_):
     '''Single process select() with non-blocking accept() and recv().'''
-    socks = [socket_]
-    while True:
-        readable, w, e = select.select(socks, [], [], 1)
+    peers = []
 
-        for s in readable:
-            if s is socket_:
-                conn, addr = socket_.accept()
-                conn.setblocking(0)
+    try:
+        max_peers = 0
 
-                socks.append(conn)
-            else:
-                socks.remove(s)
-                conn, addr = s, s.getpeername()
+        while True:
+            max_peers = max(max_peers, len(peers))
+            readable, w, e = select.select(peers + [socket_], [], [], 1)
 
-                handle_conn(conn, addr)
+            for s in readable:
+                if s is socket_:
+                    conn, addr = socket_.accept()
+                    conn.setblocking(0)
+
+                    peers.append(conn)
+                else:
+                    peers.remove(s)
+                    conn, addr = s, s.getpeername()
+
+                    handle_conn(conn, addr)
+    finally:
+        print 'Max. number of connections:', max_peers
 
 
 def epoll_server(socket_):
     '''Single process select() with non-blocking accept() and recv().'''
-    peers = {}  # fd => socket
+    peers = {}  # {fileno: socket}
 
     try:
+        max_peers = 0
+
         epoll = select.epoll()
         epoll.register(socket_, select.EPOLLIN | select.EPOLLET)
         while True:
-            for fd, event in epoll.poll(timeout=1):
+            max_peers = max(max_peers, len(peers))
+            actionable = epoll.poll(timeout=1)
+
+            for fd, event in actionable:
                 if fd == socket_.fileno():
                     conn, addr = socket_.accept()
                     conn.setblocking(0)
@@ -71,6 +83,7 @@ def epoll_server(socket_):
                     conn, addr = peers[fd], peers[fd].getpeername()
                     handle_conn(conn, addr)
     finally:
+        print 'Max. number of connections:', max_peers
         epoll.close()
 
 
