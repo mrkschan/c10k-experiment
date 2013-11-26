@@ -59,6 +59,10 @@ def select_server(socket_):
 def epoll_server(socket_):
     '''Single process select() with non-blocking accept() and recv().'''
     peers = {}  # {fileno: socket}
+    flag = (select.EPOLLIN |
+            select.EPOLLET |
+            select.EPOLLERR |
+            select.EPOLLHUP)
 
     try:
         max_peers = 0
@@ -75,13 +79,17 @@ def epoll_server(socket_):
                     conn.setblocking(0)
 
                     peers[conn.fileno()] = conn
-                    epoll.register(conn, select.EPOLLIN | select.EPOLLET)
+                    epoll.register(conn, flag)
 
                 elif event & select.EPOLLIN:
                     epoll.unregister(fd)
 
                     conn, addr = peers[fd], peers[fd].getpeername()
                     handle_conn(conn, addr)
+
+                elif event & select.EPOLLERR or event & select.EPOLLHUP:
+                    epoll.unregister(fd)
+                    peers[fd].close()
     finally:
         print 'Max. number of connections:', max_peers
         epoll.close()
