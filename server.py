@@ -43,10 +43,14 @@ def select_server(socket_):
 
             for s in readable:
                 if s is socket_:
-                    conn, addr = socket_.accept()
-                    conn.setblocking(0)
+                    while True:
+                        try:
+                            conn, addr = socket_.accept()
+                            conn.setblocking(0)
 
-                    peers.append(conn)
+                            peers.append(conn)
+                        except:
+                            break
                 else:
                     peers.remove(s)
                     conn, addr = s, s.getpeername()
@@ -75,11 +79,15 @@ def epoll_server(socket_):
 
             for fd, event in actionable:
                 if fd == socket_.fileno():
-                    conn, addr = socket_.accept()
-                    conn.setblocking(0)
+                    while True:
+                        try:
+                            conn, addr = socket_.accept()
+                            conn.setblocking(0)
 
-                    peers[conn.fileno()] = conn
-                    epoll.register(conn, flag)
+                            peers[conn.fileno()] = conn
+                            epoll.register(conn, flag)
+                        except:
+                            break
 
                 elif event & select.EPOLLIN:
                     epoll.unregister(fd)
