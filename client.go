@@ -62,17 +62,26 @@ func send_request() {
 func main() {
 	workers, requests := argparse()
 
+	queue := make(chan int, requests)
 	semaphore := make(chan int, requests)
+
+	// Spawn workers
 	for i := 0; i < workers; i++ {
 		go func() {
-			for j := 0; j < requests/workers; j++ {
+			for {
+				<- queue  // Dequeue
 				send_request()
-				semaphore <- 1
+				semaphore <- 1  // Mark request as finished
 			}
 		}()
 	}
 
-	// Wait for goroutines to complete
+	// Start sending requests
+	for i := 0; i < requests; i++ {
+		queue <- i
+	}
+
+	// Wait for all requests to be finished
 	for i := 0; i < requests; i++ {
 		<-semaphore
 	}
