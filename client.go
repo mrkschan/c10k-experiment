@@ -27,36 +27,41 @@ func argparse() (int, int) {
 	return workers, requests
 }
 
-func send_request() {
+func send_request() int64 {
+	const ERR = -1
+
 	addr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:8000")
 	if err != nil {
-		fmt.Println(err.Error())
-		return
+		return ERR
 	}
 	conn, err := net.DialTCP("tcp", nil, addr)
 	if err != nil {
-		fmt.Println(err.Error())
-		return
+		return ERR
 	}
 
-	epoch := time.Now().Unix()
+	start := time.Now().UnixNano()
 
+	epoch := time.Now().Unix()
 	payload := make([]byte, 8)
 	binary.PutVarint(payload, epoch)
 	_, err = conn.Write(payload)
 	if err != nil {
-		fmt.Println(err.Error())
-		return
+		return ERR
 	}
 
 	buffer := make([]byte, 8)
 	_, err = conn.Read(buffer)
 	if err != nil {
-		fmt.Println(err.Error())
+		return ERR
 	}
-	reply, _ := binary.Varint(buffer)
 
-	fmt.Println(reply)
+	reply, _ := binary.Varint(buffer)
+	if reply != epoch {
+		return ERR
+	}
+
+	finish := time.Now().UnixNano()
+	return (finish - start) / 1e6  // in ms.
 }
 
 func main() {
@@ -64,27 +69,61 @@ func main() {
 
 	queue := make(chan int, requests)
 	semaphore := make(chan int, requests)
+	results := make(chan int64, requests)
 
 	// Spawn workers
 	for i := 0; i < workers; i++ {
 		go func() {
 			for {
-				<- queue  // Dequeue
-				send_request()
+				<- queue  // Dequeue task
+				results <- send_request()
 				semaphore <- 1  // Mark request as finished
 			}
 		}()
 	}
 
 	// Start sending requests
+	start := time.Now().UnixNano()
 	for i := 0; i < requests; i++ {
 		queue <- i
 	}
 
 	// Wait for all requests to be finished
 	for i := 0; i < requests; i++ {
-		<-semaphore
+		<- semaphore
+	}
+	finish := time.Now().UnixNano()
+
+	var (
+		overall int64 = 0
+		succeeds int = 0
+		errors int = 0
+
+		avg float32
+		rps float32
+		time_spent float32
+	)
+	for i :=0; i < requests; i++ {
+		result := <- results
+		if result == -1 {
+			errors += 1
+		} else {
+			overall += result
+			succeeds += 1
+		}
 	}
 
+	if succeeds > 0 {
+		avg = float32(overall) / float32(succeeds)
+	} else {
+		avg = 0
+	}
+	time_spent = float32(finish - start) / 1e+9  // in sec.
+	rps = float32(requests) / float32(time_spent)
+
+	fmt.Printf("Errors: %d, Succeeds: %d\n", errors, succeeds)
+	fmt.Printf("Response time (avg.): %f ms\n", avg)
+	fmt.Printf("Requests per second (avg.): %f req/s\n", rps)
+	fmt.Printf("Time spent: %f s\n", time_spent)
 	os.Exit(0)
 }
