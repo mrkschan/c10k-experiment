@@ -61,7 +61,7 @@ func send_request() int64 {
 	}
 
 	finish := time.Now().UnixNano()
-	return (finish - start) / 1e6  // in ms.
+	return (finish - start) / 1e6 // in ms.
 }
 
 func main() {
@@ -75,9 +75,9 @@ func main() {
 	for i := 0; i < workers; i++ {
 		go func() {
 			for {
-				<- queue  // Dequeue task
+				<-queue // Dequeue task
 				results <- send_request()
-				semaphore <- 1  // Mark request as finished
+				semaphore <- 1 // Mark request as finished
 			}
 		}()
 	}
@@ -90,21 +90,21 @@ func main() {
 
 	// Wait for all requests to be finished
 	for i := 0; i < requests; i++ {
-		<- semaphore
+		<-semaphore
 	}
 	finish := time.Now().UnixNano()
 
 	var (
-		overall int64 = 0
-		succeeds int = 0
-		errors int = 0
+		overall  int64 = 0
+		succeeds int   = 0
+		errors   int   = 0
 
-		avg float32
-		rps float32
+		avg        float32
+		rps        float32
 		time_spent float32
 	)
-	for i :=0; i < requests; i++ {
-		result := <- results
+	for i := 0; i < requests; i++ {
+		result := <-results
 		if result == -1 {
 			errors += 1
 		} else {
@@ -118,7 +118,7 @@ func main() {
 	} else {
 		avg = 0
 	}
-	time_spent = float32(finish - start) / 1e+9  // in sec.
+	time_spent = float32(finish-start) / 1e+9 // in sec.
 	rps = float32(requests) / float32(time_spent)
 
 	fmt.Printf("Errors: %d, Succeeds: %d\n", errors, succeeds)
