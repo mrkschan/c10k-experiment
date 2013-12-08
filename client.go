@@ -28,15 +28,19 @@ func argparse() (int, int) {
 }
 
 func send_request() int64 {
-	const ERR = -1
+	const (
+		SOCK_ERR = -1
+		CONN_ERR = -2
+		SVR_ERR  = -3
+	)
 
 	addr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:8000")
 	if err != nil {
-		return ERR
+		return SOCK_ERR
 	}
 	conn, err := net.DialTCP("tcp", nil, addr)
 	if err != nil {
-		return ERR
+		return SOCK_ERR
 	}
 
 	start := time.Now().UnixNano()
@@ -46,18 +50,18 @@ func send_request() int64 {
 	binary.PutVarint(payload, epoch)
 	_, err = conn.Write(payload)
 	if err != nil {
-		return ERR
+		return CONN_ERR
 	}
 
 	buffer := make([]byte, 8)
 	_, err = conn.Read(buffer)
 	if err != nil {
-		return ERR
+		return CONN_ERR
 	}
 
 	reply, _ := binary.Varint(buffer)
 	if reply != epoch {
-		return ERR
+		return SVR_ERR
 	}
 
 	finish := time.Now().UnixNano()
@@ -99,14 +103,26 @@ func main() {
 		succeeds int   = 0
 		errors   int   = 0
 
+		sock_errors int = 0
+		conn_errors int = 0
+		svr_errors  int = 0
+
 		avg        float32
 		rps        float32
 		time_spent float32
 	)
 	for i := 0; i < requests; i++ {
 		result := <-results
-		if result == -1 {
+		if result < 0 {
 			errors += 1
+			switch result {
+			case -1:
+				sock_errors += 1
+			case -2:
+				conn_errors += 1
+			case -3:
+				svr_errors += 1
+			}
 		} else {
 			overall += result
 			succeeds += 1
@@ -122,6 +138,8 @@ func main() {
 	rps = float32(requests) / float32(time_spent)
 
 	fmt.Printf("Errors: %d, Succeeds: %d\n", errors, succeeds)
+	fmt.Printf("Socket errors: %d, Conn. errors: %d, Server errors: %d\n",
+		sock_errors, conn_errors, svr_errors)
 	fmt.Printf("Response time (avg.): %f ms\n", avg)
 	fmt.Printf("Requests per second (avg.): %f req/s\n", rps)
 	fmt.Printf("Time spent: %f s\n", time_spent)
