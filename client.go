@@ -29,14 +29,16 @@ func argparse() (int, int) {
 
 func send_request() int64 {
 	const (
-		SOCK_ERR = -1
-		CONN_ERR = -2
-		SVR_ERR  = -3
+		DNS_ERR = -1
+		SOCK_ERR = -2
+		WRITE_ERR = -3
+		READ_ERR = -4
+		SVR_ERR  = -5
 	)
 
 	addr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:8000")
 	if err != nil {
-		return SOCK_ERR
+		return DNS_ERR
 	}
 	conn, err := net.DialTCP("tcp", nil, addr)
 	if err != nil {
@@ -50,13 +52,13 @@ func send_request() int64 {
 	binary.PutVarint(payload, epoch)
 	_, err = conn.Write(payload)
 	if err != nil {
-		return CONN_ERR
+		return WRITE_ERR
 	}
 
 	buffer := make([]byte, 8)
 	_, err = conn.Read(buffer)
 	if err != nil {
-		return CONN_ERR
+		return READ_ERR
 	}
 
 	reply, _ := binary.Varint(buffer)
@@ -103,8 +105,10 @@ func main() {
 		succeeds int   = 0
 		errors   int   = 0
 
+		dns_errors int = 0
 		sock_errors int = 0
-		conn_errors int = 0
+		read_errors int = 0
+		write_errors int = 0
 		svr_errors  int = 0
 
 		avg        float32
@@ -117,10 +121,14 @@ func main() {
 			errors += 1
 			switch result {
 			case -1:
-				sock_errors += 1
+				dns_errors += 1
 			case -2:
-				conn_errors += 1
+				sock_errors += 1
 			case -3:
+				write_errors += 1
+			case -4:
+				read_errors += 1
+			case -5:
 				svr_errors += 1
 			}
 		} else {
@@ -138,8 +146,8 @@ func main() {
 	rps = float32(requests) / float32(time_spent)
 
 	fmt.Printf("Errors: %d, Succeeds: %d\n", errors, succeeds)
-	fmt.Printf("Socket errors: %d, Conn. errors: %d, Server errors: %d\n",
-		sock_errors, conn_errors, svr_errors)
+	fmt.Printf("DNS: %d, Socket: %d, Write: %d, Read: %d, Server: %d\n",
+		dns_errors, sock_errors, write_errors, read_errors, svr_errors)
 	fmt.Printf("Response time (avg.): %f ms\n", avg)
 	fmt.Printf("Requests per second (avg.): %f req/s\n", rps)
 	fmt.Printf("Time spent: %f s\n", time_spent)
