@@ -30,7 +30,7 @@ def basic_server(socket_):
         [p.terminate() for p in child if p.is_alive()]
 
 
-def select_server(socket_):
+def select_server(socket_, timeout=1):
     '''Single process select() with non-blocking accept() and recv().'''
     peers = []
 
@@ -39,7 +39,7 @@ def select_server(socket_):
 
         while True:
             max_peers = max(max_peers, len(peers))
-            readable, w, e = select.select(peers + [socket_], [], [], 1)
+            readable, w, e = select.select(peers + [socket_], [], [], timeout)
 
             for s in readable:
                 if s is socket_:
@@ -60,7 +60,7 @@ def select_server(socket_):
         print 'Max. number of connections:', max_peers
 
 
-def epoll_server(socket_):
+def epoll_server(socket_, timeout=1):
     '''Single process select() with non-blocking accept() and recv().'''
     peers = {}  # {fileno: socket}
     flag = (select.EPOLLIN |
@@ -75,7 +75,7 @@ def epoll_server(socket_):
         epoll.register(socket_, select.EPOLLIN | select.EPOLLET)
         while True:
             max_peers = max(max_peers, len(peers))
-            actionable = epoll.poll(timeout=1)
+            actionable = epoll.poll(timeout=timeout)
 
             for fd, event in actionable:
                 if fd == socket_.fileno():
@@ -112,6 +112,8 @@ def main():
                                          % ', '.join(MODES)))
     argparser.add_argument('--backlog', type=int, default=0,
                            help='socket.listen() backlog')
+    argparser.add_argument('--timeout', type=int, default=1000,
+                           help='select/epoll timeout in ms')
     args = argparser.parse_args()
 
     if args.mode not in MODES:
@@ -127,13 +129,14 @@ def main():
         if args.mode in ('select', 'epoll'):
             socket_.setblocking(0)
 
+        timeout = args.timeout / 1000
         socket_.listen(args.backlog)
         if args.mode == 'basic':
             basic_server(socket_)
         elif args.mode == 'select':
-            select_server(socket_)
+            select_server(socket_, timeout)
         elif args.mode == 'epoll':
-            epoll_server(socket_)
+            epoll_server(socket_, timeout)
     except KeyboardInterrupt:
         pass
     finally:
