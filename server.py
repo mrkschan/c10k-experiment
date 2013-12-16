@@ -60,8 +60,49 @@ def select_server(socket_, timeout=1):
         print 'Max. number of connections:', max_peers
 
 
+def poll_server(socket_, timeout=1):
+    '''Single process poll() with non-blocking accept() and recv().'''
+    peers = {}  # {fileno: socket}
+    flag = (select.POLLIN |
+            select.POLLERR |
+            select.POLLHUP)
+
+    try:
+        max_peers = 0
+
+        poll = select.poll()
+        poll.register(socket_, select.POLLIN)
+        while True:
+            max_peers = max(max_peers, len(peers))
+            actionable = poll.poll(timeout)
+
+            for fd, event in actionable:
+                if fd == socket_.fileno():
+                    while True:
+                        try:
+                            conn, addr = socket_.accept()
+                            conn.setblocking(0)
+
+                            peers[conn.fileno()] = conn
+                            poll.register(conn, flag)
+                        except:
+                            break
+
+                elif event & select.POLLIN:
+                    poll.unregister(fd)
+
+                    conn, addr = peers[fd], peers[fd].getpeername()
+                    handle_conn(conn, addr)
+
+                elif event & select.POLLERR or event & select.POLLHUP:
+                    poll.unregister(fd)
+                    peers[fd].close()
+    finally:
+        print 'Max. number of connections:', max_peers
+
+
 def epoll_server(socket_, timeout=1):
-    '''Single process select() with non-blocking accept() and recv().'''
+    '''Single process epoll() with non-blocking accept() and recv().'''
     peers = {}  # {fileno: socket}
     flag = (select.EPOLLIN |
             select.EPOLLET |
@@ -105,7 +146,7 @@ def epoll_server(socket_, timeout=1):
 
 def main():
     HOST, PORT = '127.0.0.1', 8000
-    MODES = ('basic', 'select', 'epoll')
+    MODES = ('basic', 'select', 'poll', 'epoll')
 
     argparser = argparse.ArgumentParser()
     argparser.add_argument('mode', help=('Operating mode of the server: %s'
@@ -113,7 +154,7 @@ def main():
     argparser.add_argument('--backlog', type=int, default=0,
                            help='socket.listen() backlog')
     argparser.add_argument('--timeout', type=int, default=1000,
-                           help='select/epoll timeout in ms')
+                           help='select/poll/epoll timeout in ms')
     args = argparser.parse_args()
 
     if args.mode not in MODES:
@@ -126,7 +167,7 @@ def main():
         socket_.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         socket_.bind((HOST, PORT))
 
-        if args.mode in ('select', 'epoll'):
+        if args.mode in ('select', 'poll', 'epoll'):
             socket_.setblocking(0)
 
         timeout = args.timeout / 1000
@@ -135,6 +176,8 @@ def main():
             basic_server(socket_)
         elif args.mode == 'select':
             select_server(socket_, timeout)
+        elif args.mode == 'poll':
+            poll_server(socket_, timeout)
         elif args.mode == 'epoll':
             epoll_server(socket_, timeout)
     except KeyboardInterrupt:
