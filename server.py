@@ -1,3 +1,4 @@
+from multiprocessing.reduction import reduce_socket
 import multiprocessing
 import select
 import socket
@@ -17,6 +18,13 @@ def handle_conn(conn, addr):
     conn.close()
 
 
+def queued_handle_conn(queue):
+    while True:
+        rebuild_func, hints, addr = queue.get()
+        conn = rebuild_func(*hints)
+        handle_conn(conn, addr)
+
+
 def basic_server(socket_):
     child = []
     try:
@@ -30,12 +38,18 @@ def basic_server(socket_):
         [p.terminate() for p in child if p.is_alive()]
 
 
-def select_server(socket_, timeout=1):
+def select_server(socket_, timeout=1, use_worker=False):
     '''Single process select() with non-blocking accept() and recv().'''
     peers = []
 
     try:
         max_peers = 0
+
+        if use_worker:
+            queue = multiprocessing.Queue()
+            worker = multiprocessing.Process(target=queued_handle_conn,
+                                             args=(queue,))
+            worker.start()
 
         while True:
             max_peers = max(max_peers, len(peers))
@@ -55,12 +69,19 @@ def select_server(socket_, timeout=1):
                     peers.remove(s)
                     conn, addr = s, s.getpeername()
 
-                    handle_conn(conn, addr)
+                    if use_worker:
+                        rebuild_func, hints = reduce_socket(conn)
+                        queue.put((rebuild_func, hints, addr))
+                    else:
+                        handle_conn(conn, addr)
     finally:
+        if use_worker and worker.is_alive():
+            worker.terminate()
+
         print 'Max. number of connections:', max_peers
 
 
-def poll_server(socket_, timeout=1):
+def poll_server(socket_, timeout=1, use_worker=False):
     '''Single process poll() with non-blocking accept() and recv().'''
     peers = {}  # {fileno: socket}
     flag = (select.POLLIN |
@@ -69,6 +90,12 @@ def poll_server(socket_, timeout=1):
 
     try:
         max_peers = 0
+
+        if use_worker:
+            queue = multiprocessing.Queue()
+            worker = multiprocessing.Process(target=queued_handle_conn,
+                                             args=(queue,))
+            worker.start()
 
         poll = select.poll()
         poll.register(socket_, select.POLLIN)
@@ -90,18 +117,25 @@ def poll_server(socket_, timeout=1):
 
                 elif event & select.POLLIN:
                     poll.unregister(fd)
-
                     conn, addr = peers[fd], peers[fd].getpeername()
-                    handle_conn(conn, addr)
+
+                    if use_worker:
+                        rebuild_func, hints = reduce_socket(conn)
+                        queue.put((rebuild_func, hints, addr))
+                    else:
+                        handle_conn(conn, addr)
 
                 elif event & select.POLLERR or event & select.POLLHUP:
                     poll.unregister(fd)
                     peers[fd].close()
     finally:
+        if use_worker and worker.is_alive():
+            worker.terminate()
+
         print 'Max. number of connections:', max_peers
 
 
-def epoll_server(socket_, timeout=1):
+def epoll_server(socket_, timeout=1, use_worker=False):
     '''Single process epoll() with non-blocking accept() and recv().'''
     peers = {}  # {fileno: socket}
     flag = (select.EPOLLIN |
@@ -111,6 +145,12 @@ def epoll_server(socket_, timeout=1):
 
     try:
         max_peers = 0
+
+        if use_worker:
+            queue = multiprocessing.Queue()
+            worker = multiprocessing.Process(target=queued_handle_conn,
+                                             args=(queue,))
+            worker.start()
 
         epoll = select.epoll()
         epoll.register(socket_, select.EPOLLIN | select.EPOLLET)
@@ -132,16 +172,23 @@ def epoll_server(socket_, timeout=1):
 
                 elif event & select.EPOLLIN:
                     epoll.unregister(fd)
-
                     conn, addr = peers[fd], peers[fd].getpeername()
-                    handle_conn(conn, addr)
+
+                    if use_worker:
+                        rebuild_func, hints = reduce_socket(conn)
+                        queue.put((rebuild_func, hints, addr))
+                    else:
+                        handle_conn(conn, addr)
 
                 elif event & select.EPOLLERR or event & select.EPOLLHUP:
                     epoll.unregister(fd)
                     peers[fd].close()
     finally:
-        print 'Max. number of connections:', max_peers
+        if use_worker and worker.is_alive():
+            worker.terminate()
         epoll.close()
+
+        print 'Max. number of connections:', max_peers
 
 
 def main():
@@ -155,6 +202,9 @@ def main():
                            help='socket.listen() backlog')
     argparser.add_argument('--timeout', type=int, default=1000,
                            help='select/poll/epoll timeout in ms')
+    argparser.add_argument('--worker', action='store_true',
+                           help=('Spawn a worker to process request in '
+                                 'select/poll/epoll mode'))
     args = argparser.parse_args()
 
     if args.mode not in MODES:
@@ -175,11 +225,11 @@ def main():
         if args.mode == 'basic':
             basic_server(socket_)
         elif args.mode == 'select':
-            select_server(socket_, timeout)
+            select_server(socket_, timeout, use_worker=args.worker)
         elif args.mode == 'poll':
-            poll_server(socket_, timeout)
+            poll_server(socket_, timeout, use_worker=args.worker)
         elif args.mode == 'epoll':
-            epoll_server(socket_, timeout)
+            epoll_server(socket_, timeout, use_worker=args.worker)
     except KeyboardInterrupt:
         pass
     finally:

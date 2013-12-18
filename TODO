@@ -1,3 +1,2 @@
-* server worker model
 * python load generator multithreading instead of multiprocessing
 * python load generator greenlet / gevent
