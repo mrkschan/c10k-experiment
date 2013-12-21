@@ -70,6 +70,8 @@ def select_server(socket_, timeout=1, use_worker=False):
                     conn, addr = s, s.getpeername()
 
                     if use_worker:
+                        # Behind-the-scene: 'conn' is serialized and sent to
+                        # worker process via socket (IPC).
                         rebuild_func, hints = reduce_socket(conn)
                         queue.put((rebuild_func, hints, addr))
                     else:
@@ -120,6 +122,8 @@ def poll_server(socket_, timeout=1, use_worker=False):
                     conn, addr = peers[fd], peers[fd].getpeername()
 
                     if use_worker:
+                        # Behind-the-scene: 'conn' is serialized and sent to
+                        # worker process via socket (IPC).
                         rebuild_func, hints = reduce_socket(conn)
                         queue.put((rebuild_func, hints, addr))
                     else:
@@ -175,6 +179,8 @@ def epoll_server(socket_, timeout=1, use_worker=False):
                     conn, addr = peers[fd], peers[fd].getpeername()
 
                     if use_worker:
+                        # Behind-the-scene: 'conn' is serialized and sent to
+                        # worker process via socket (IPC).
                         rebuild_func, hints = reduce_socket(conn)
                         queue.put((rebuild_func, hints, addr))
                     else:
@@ -204,7 +210,10 @@ def main():
                            help='select/poll/epoll timeout in ms')
     argparser.add_argument('--worker', action='store_true',
                            help=('Spawn a worker to process request in '
-                                 'select/poll/epoll mode'))
+                                 'select/poll/epoll mode. '
+                                 'NOTE: The sole purpose of this option is '
+                                 'experiment, it does not really help shorten '
+                                 'the response time.'))
     args = argparser.parse_args()
 
     if args.mode not in MODES:
