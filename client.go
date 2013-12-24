@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"flag"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"strconv"
@@ -11,37 +12,48 @@ import (
 )
 
 func usage() {
-	fmt.Println("Usage: %s [--workers=WORKERS] REQUESTS", os.Args[0])
+	msg := "Usage: %s [--workers=WORKERS --verbose] REQUESTS"
+	fmt.Println(msg, os.Args[0])
 	os.Exit(0)
 }
-func argparse() (int, int) {
-	var workers int
+func argparse() (int, int, bool) {
+	var (
+		workers int
+		verbose bool
+	)
 	flag.IntVar(&workers, "workers", 1,
 		"Number of workers to generate requests in parallel")
+	flag.BoolVar(&verbose, "verbose", false, "Log error to stderr")
 	flag.Parse()
 	requests, err := strconv.Atoi(flag.Arg(0))
 	if err != nil {
 		usage()
 	}
 
-	return workers, requests
+	return workers, requests, verbose
 }
 
-func send_request() int64 {
+func send_request(verbose bool) int64 {
 	const (
-		DNS_ERR = -1
-		SOCK_ERR = -2
+		DNS_ERR   = -1
+		SOCK_ERR  = -2
 		WRITE_ERR = -3
-		READ_ERR = -4
-		SVR_ERR  = -5
+		READ_ERR  = -4
+		SVR_ERR   = -5
 	)
 
 	addr, err := net.ResolveTCPAddr("tcp4", "127.0.0.1:8000")
 	if err != nil {
+		if verbose {
+			log.Println(err)
+		}
 		return DNS_ERR
 	}
 	conn, err := net.DialTCP("tcp", nil, addr)
 	if err != nil {
+		if verbose {
+			log.Println(err)
+		}
 		return SOCK_ERR
 	}
 
@@ -52,17 +64,27 @@ func send_request() int64 {
 	binary.PutVarint(payload, epoch)
 	_, err = conn.Write(payload)
 	if err != nil {
+		if verbose {
+			log.Println(err)
+		}
 		return WRITE_ERR
 	}
 
 	buffer := make([]byte, 8)
 	_, err = conn.Read(buffer)
 	if err != nil {
+		if verbose {
+			log.Println(err)
+		}
 		return READ_ERR
 	}
 
 	reply, _ := binary.Varint(buffer)
 	if reply != epoch {
+		if verbose {
+			msg := "Integrity error - reply: %d, epoch: %d"
+			log.Printf(msg, reply, epoch)
+		}
 		return SVR_ERR
 	}
 
@@ -71,7 +93,7 @@ func send_request() int64 {
 }
 
 func main() {
-	workers, requests := argparse()
+	workers, requests, verbose := argparse()
 
 	queue := make(chan int, requests)
 	semaphore := make(chan int, requests)
@@ -82,7 +104,7 @@ func main() {
 		go func() {
 			for {
 				<-queue // Dequeue task
-				results <- send_request()
+				results <- send_request(verbose)
 				semaphore <- 1 // Mark request as finished
 			}
 		}()
@@ -105,11 +127,11 @@ func main() {
 		succeeds int   = 0
 		errors   int   = 0
 
-		dns_errors int = 0
-		sock_errors int = 0
-		read_errors int = 0
+		dns_errors   int = 0
+		sock_errors  int = 0
+		read_errors  int = 0
 		write_errors int = 0
-		svr_errors  int = 0
+		svr_errors   int = 0
 
 		avg        float32
 		rps        float32
