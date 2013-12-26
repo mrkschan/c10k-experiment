@@ -56,6 +56,7 @@ func send_request(verbose bool) int64 {
 		}
 		return SOCK_ERR
 	}
+	defer conn.Close()
 
 	start := time.Now().UnixNano()
 
