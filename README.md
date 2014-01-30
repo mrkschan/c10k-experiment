@@ -41,4 +41,31 @@ Therefore, when the server socket is ready to accept a connection, the entire co
 If the entire connection queue is not consumed, the queue will keep growing until hitting the queue size defined by the `backlog` parameter of `listen()`. The system then rejects any new connection / TCP handshake.
 
 
+Note 2 - High volume socket passing between Python subprocesses should be prevented
+--
+
+In Python, you can pass around a socket object easily with the multiprocessing module like below.
+
+    from multiprocessing.reduction import reduce_socket
+    import multiprocessing
+
+    def parent():
+        queue = multiprocessing.Queue()
+        my_child = multiprocessing.Process(target=child, args=(queue,))
+        my_child.start()
+
+        conn = socket.accept()
+        rebuild_func, hints = reduce_socket(conn)  # Serialize conn
+        queue.put((rebuild_func, hints))  # Pass to my_child
+            :
+            :
+
+    def child(queue):
+        rebuild_func, hints = queue.get()
+        conn = rebuild_func(*hints)  # De-serialize conn
+            :
+            :
+
+The socket object `conn` is first serialized and then sent to the child process via a `Queue`. Behind the `Queue`, there is another pair of sockets created to send and receive serialized objects. As a result, a large block of time is spent on serializing/de-serializing the objects when the volume of socket passing is high. (TODO: Can we send fd without using socket?)
+
 ==
