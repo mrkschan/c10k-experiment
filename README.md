@@ -66,6 +66,10 @@ In Python, you can pass around a socket object easily with the multiprocessing m
             :
             :
 
-The socket object `conn` is first serialized and then sent to the child process via a `Queue`. Behind the `Queue`, there is another pair of sockets created to send and receive serialized objects. As a result, a large block of time is spent on serializing/de-serializing the objects when the volume of socket passing is high. (TODO: Can we send fd without using socket?)
+The socket object `conn` is first serialized and then sent to the child process via a `Queue`. Behind the `Queue`, there is another pair of sockets created to send and receive serialized objects. As a result, a large block of time is spent on serializing/de-serializing the objects when the volume of socket passing is high (TODO: Can we send fd without using socket?).
+
+In a typical web server implementations, e.g. Apache and Nginx, they provide a pre-fork model instead. Workers are forked from the master process and the listen socket is inherited from the master. A mutex is applied onto the listen socket to facilicate multiprocessing. Different workers would own different set of peer sockets and thus the socket passing overhead is prevented.
+
+
 
 ==
